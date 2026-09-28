@@ -6,6 +6,7 @@ mod ui;
 mod version_check;
 
 use clap::{ArgAction, CommandFactory, FromArgMatches, Parser, Subcommand};
+use std::path::PathBuf;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -39,6 +40,14 @@ struct Cli {
 
     #[arg(long, global = true, value_name = "PATH")]
     save: Option<String>,
+
+    #[arg(
+        long,
+        global = true,
+        value_name = "PATH",
+        help = "Path to a custom config file (overrides ~/.grat/config.toml)"
+    )]
+    config_path: Option<PathBuf>,
 
     #[arg(long, short, global = true)]
     quiet: bool,
@@ -103,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
 
     let _taxonomy_update_handle =
         tokio::spawn(grat_core::taxonomy::updater::check_and_update(cli.offline));
-    let loaded_config = config::ConfigManager::new()
+    let loaded_config = config::ConfigManager::new(cli.config_path.clone())
         .and_then(|manager| manager.load())
         .ok();
 
@@ -303,6 +312,28 @@ mod tests {
         let cli = Cli::try_parse_from(["grat", "trace", &tx_hash, "--save", "out.json"])
             .expect("--save after subcommand should parse");
         assert_eq!(cli.save.as_deref(), Some("out.json"));
+    }
+
+    #[test]
+    fn parses_config_path_flag() {
+        let cli = Cli::try_parse_from([
+            "grat",
+            "--config-path",
+            "/tmp/custom_config.toml",
+            "decode",
+            "abc123",
+        ])
+        .expect("cli should parse with --config-path");
+        assert_eq!(
+            cli.config_path,
+            Some(PathBuf::from("/tmp/custom_config.toml"))
+        );
+    }
+
+    #[test]
+    fn config_path_absent_by_default() {
+        let cli = Cli::try_parse_from(["grat", "db", "update"]).expect("cli should parse");
+        assert!(cli.config_path.is_none());
     }
 
     #[test]

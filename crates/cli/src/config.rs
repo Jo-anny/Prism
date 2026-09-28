@@ -13,10 +13,14 @@ pub struct ConfigManager {
 }
 
 impl ConfigManager {
-    pub fn new() -> anyhow::Result<Self> {
-        Ok(Self {
-            config_path: default_config_path()?,
-        })
+    /// Create a new ConfigManager. If `custom_path` is `Some`, that path is used
+    /// verbatim; otherwise falls back to the default `~/.grat/config.toml` location.
+    pub fn new(custom_path: Option<PathBuf>) -> anyhow::Result<Self> {
+        let config_path = match custom_path {
+            Some(path) => path,
+            None => default_config_path()?,
+        };
+        Ok(Self { config_path })
     }
 
     #[cfg(test)]
@@ -122,9 +126,17 @@ mod tests {
 
     #[test]
     fn default_path_uses_grat_config_toml() {
-        let manager = ConfigManager::new().expect("manager with default path");
+        let manager = ConfigManager::new(None).expect("manager with default path");
 
         let path = manager.path().to_string_lossy();
         assert!(path.ends_with(".grat/config.toml") || path.ends_with(".grat\\config.toml"));
+    }
+
+    #[test]
+    fn new_uses_custom_path_when_provided() {
+        let path = unique_path("custom_override").join("custom_config.toml");
+        let manager = ConfigManager::new(Some(path.clone())).expect("manager with custom path");
+
+        assert_eq!(manager.path(), path.as_path());
     }
 }

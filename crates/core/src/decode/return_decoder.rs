@@ -478,6 +478,7 @@ mod tests {
             structs: vec![struct_def],
             name: None,
             version: None,
+            metadata: crate::spec::metadata::ContractMetadata::default(),
             enums: vec![],
             unions: vec![],
         };

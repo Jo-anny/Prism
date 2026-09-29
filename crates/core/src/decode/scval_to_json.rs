@@ -7,11 +7,13 @@
 //! module renders any `ScVal` into plain JSON.
 
 use crate::decode::auth::scaddress_to_strkey;
+use crate::decode::return_decoder::ReturnValueDecoder;
+use crate::spec::decoder::ContractSpec;
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use stellar_xdr::curr::{
     ContractExecutable, Int128Parts, Int256Parts, ScContractInstance, ScError, ScErrorCode, ScMap,
-    ScVal, UInt128Parts, UInt256Parts,
+    ScSpecTypeDef, ScVal, UInt128Parts, UInt256Parts,
 };
 
 /// Maximum `ScVal` nesting depth the converter will descend into.
@@ -31,6 +33,19 @@ const MAX_SCVAL_DEPTH: usize = 100;
 /// [`MAX_SCVAL_DEPTH`] is truncated in place rather than recursed into.
 pub fn scval_to_json(val: &ScVal) -> Value {
     convert(val, 0)
+}
+
+/// Convert an [`ScVal`] into JSON using a contract type definition.
+///
+/// Unlike [`scval_to_json`], this entry point can resolve UDTs, including
+/// simple integer enums and complex symbol-headed enum values, when the
+/// corresponding definitions are present in `contract_spec`.
+pub fn scval_to_json_with_spec(
+    val: &ScVal,
+    type_def: Option<&ScSpecTypeDef>,
+    contract_spec: Option<&ContractSpec>,
+) -> Value {
+    ReturnValueDecoder::new().decode(val, type_def, contract_spec)
 }
 
 fn depth_exceeded_marker() -> Value {

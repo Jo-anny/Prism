@@ -22,10 +22,10 @@ pub mod xdr;
 
 #[cfg(feature = "decode")]
 pub use decode::{
-    walk_diagnostic_events, AddressCredential, AddressWithNonce, ArgumentDecoder, AuthChain,
-    AuthCredential, AuthFunctionKind, AuthInvocation, DecodedArgument, DecodedFunctionCall,
-    DiagnosticEventKind, DiagnosticEventWalker, FunctionCallDecoder, MultiOpDecoder,
-    ReturnValueDecoder, StructuredDiagnosticEvent,
+    scval_to_json, scval_to_json_with_spec, walk_diagnostic_events, AddressCredential,
+    AddressWithNonce, ArgumentDecoder, AuthChain, AuthCredential, AuthFunctionKind, AuthInvocation,
+    DecodedArgument, DecodedFunctionCall, DiagnosticEventKind, DiagnosticEventWalker, EnumDecoder,
+    FunctionCallDecoder, MultiOpDecoder, ReturnValueDecoder, StructuredDiagnosticEvent,
 };
 pub use error::{GratError, GratResult};
 #[cfg(feature = "decode")]

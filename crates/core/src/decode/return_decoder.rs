@@ -1,3 +1,4 @@
+use crate::decode::enum_decoder::EnumDecoder;
 use crate::spec::decoder::{ContractFunction, ContractSpec, ContractStructDef};
 use serde_json::{json, Value};
 use stellar_xdr::curr::{ScSpecTypeDef, ScVal};
@@ -245,7 +246,7 @@ impl ReturnValueDecoder {
                     }
                     // 2. Check enums
                     if let Some(enum_def) = cs.enums.iter().find(|e| e.name == udt_name) {
-                        return Self::decode_enum(val, enum_def);
+                        return EnumDecoder::new().decode(val, enum_def);
                     }
                     // 3. Check unions
                     if let Some(union_def) = cs.unions.iter().find(|u| u.name == udt_name) {
@@ -289,30 +290,6 @@ impl ReturnValueDecoder {
                     map_obj.insert(field.name.clone(), field_value);
                 }
                 Value::Object(map_obj)
-            }
-            _ => Self::decode_dynamic(val),
-        }
-    }
-
-    fn decode_enum(val: &ScVal, enum_def: &crate::spec::decoder::ContractEnumDef) -> Value {
-        match val {
-            ScVal::Symbol(sym) => json!(sym.to_string()),
-            ScVal::String(s) => json!(s.to_string()),
-            ScVal::U32(u) => {
-                if let Some(case) = enum_def.cases.iter().find(|c| c.value == *u) {
-                    json!(case.name.clone())
-                } else {
-                    json!(*u)
-                }
-            }
-            ScVal::I32(i) if *i >= 0 => {
-                #[allow(clippy::cast_sign_loss)]
-                let u = *i as u32;
-                if let Some(case) = enum_def.cases.iter().find(|c| c.value == u) {
-                    json!(case.name.clone())
-                } else {
-                    json!(*i)
-                }
             }
             _ => Self::decode_dynamic(val),
         }

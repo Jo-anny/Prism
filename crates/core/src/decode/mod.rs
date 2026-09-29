@@ -9,6 +9,7 @@ pub mod cross_contract;
 pub mod decode_context;
 pub mod deepest_error;
 pub mod diagnostic;
+pub mod enum_decoder;
 pub mod event_walker;
 pub mod fee_analyzer;
 pub mod function_call_decoder;
@@ -31,6 +32,7 @@ pub use auth::{
 pub use auth_address_nonce::AddressWithNonce;
 pub use chain_analyzer::{analyze_call_chain, CallChain, ChainAnalyzer, ChainFrame, FrameRole};
 pub use deepest_error::{find_deepest_error, DeepestError, DeepestErrorFinder};
+pub use enum_decoder::EnumDecoder;
 pub use function_call_decoder::{DecodedArgument, DecodedFunctionCall, FunctionCallDecoder};
 pub use json_to_scval::json_to_scval;
 pub use multi_op_decoder::{decode_transaction_with_op_filter, MultiOpDecoder};
@@ -38,7 +40,7 @@ pub use resource_analyzer::{
     MetricDiagnostic, MetricKind, ResourceDiagnostics, ResourceUsageAnalyzer, TransactionResultMeta,
 };
 pub use return_decoder::ReturnValueDecoder;
-pub use scval_to_json::scval_to_json;
+pub use scval_to_json::{scval_to_json, scval_to_json_with_spec};
 pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };

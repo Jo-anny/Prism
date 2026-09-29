@@ -3,7 +3,30 @@
 use crate::types::trace::{DiffChangeType, LedgerEntryDiff, StateDiff};
 use serde::Serialize;
 use std::fmt::Debug;
-use stellar_xdr::curr::{ContractDataEntry, ScMap, ScVal};
+use stellar_xdr::curr::{ContractCodeEntry, ContractDataEntry, ScMap, ScVal};
+
+/// Report a contract WASM code hash rotation.
+///
+/// The code hash uniquely identifies the deployed bytecode, so a changed hash
+/// is reported as an update with the previous and replacement hashes in hex.
+/// No entry is returned when the hashes are equal.
+pub fn diff_contract_code_entry(old: &ContractCodeEntry, new: &ContractCodeEntry) -> StateDiff {
+    let old_hash = hex::encode(old.hash.0);
+    let new_hash = hex::encode(new.hash.0);
+
+    let entries = if old.hash == new.hash {
+        Vec::new()
+    } else {
+        vec![LedgerEntryDiff {
+            key: "contract_code.hash".to_owned(),
+            before: Some(old_hash),
+            after: Some(new_hash),
+            change_type: DiffChangeType::Updated,
+        }]
+    };
+
+    StateDiff { entries }
+}
 
 /// Compute the changes to a contract storage entry's value.
 ///
@@ -124,12 +147,20 @@ fn json_string<T: Debug + Serialize>(value: &T) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::diff_contract_data;
+    use super::{diff_contract_code_entry, diff_contract_data};
     use crate::types::trace::DiffChangeType;
     use stellar_xdr::curr::{
-        ContractDataDurability, ContractDataEntry, ExtensionPoint, Hash, ScMapEntry, ScSymbol,
-        ScVal, StringM,
+        ContractCodeEntry, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry,
+        ExtensionPoint, Hash, ScMapEntry, ScSymbol, ScVal, StringM,
     };
+
+    fn contract_code(hash: [u8; 32]) -> ContractCodeEntry {
+        ContractCodeEntry {
+            ext: ContractCodeEntryExt::V0,
+            hash: Hash(hash),
+            code: Default::default(),
+        }
+    }
 
     fn contract_data(val: ScVal) -> ContractDataEntry {
         ContractDataEntry {
@@ -242,5 +273,37 @@ mod tests {
             DiffChangeType::Created
         ));
         assert!(diff.entries[0].key.ends_with("[2]"));
+    }
+
+    #[test]
+    fn contract_code_hash_rotation_reports_before_and_after_hashes() {
+        let old = contract_code([0x11; 32]);
+        let new = contract_code([0x22; 32]);
+
+        let diff = diff_contract_code_entry(&old, &new);
+        let expected_old_hash = "11".repeat(32);
+        let expected_new_hash = "22".repeat(32);
+
+        assert_eq!(diff.entries.len(), 1);
+        assert_eq!(diff.entries[0].key, "contract_code.hash");
+        assert_eq!(
+            diff.entries[0].before.as_deref(),
+            Some(expected_old_hash.as_str())
+        );
+        assert_eq!(
+            diff.entries[0].after.as_deref(),
+            Some(expected_new_hash.as_str())
+        );
+        assert!(matches!(
+            diff.entries[0].change_type,
+            DiffChangeType::Updated
+        ));
+    }
+
+    #[test]
+    fn identical_contract_code_hashes_produce_no_changes() {
+        let entry = contract_code([0x11; 32]);
+
+        assert!(diff_contract_code_entry(&entry, &entry).entries.is_empty());
     }
 }

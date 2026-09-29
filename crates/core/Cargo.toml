@@ -46,6 +46,7 @@ sled = { workspace = true }
 dashmap = { workspace = true }
 directories = { workspace = true }
 flate2 = { workspace = true }
+xz2 = { workspace = true }
 
 # Logging
 tracing = { workspace = true }

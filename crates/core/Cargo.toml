@@ -59,6 +59,7 @@ thiserror = { workspace = true }
 
 # URL parsing (for taxonomy linter documentation_url validation)
 url = { workspace = true }
+uuid = { version = "1.26.1", features = ["serde", "v4"] }
 
 [[bin]]
 name = "taxonomy_linter"

@@ -84,6 +84,7 @@ wasmparser = "0.218"
 # Storage & Caching
 redb = "2"
 sled = "0.34"
+dashmap = "6"
 directories = "5"
 flate2 = "1"
 xz2 = "0.1"

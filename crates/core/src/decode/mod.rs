@@ -22,6 +22,7 @@ pub mod report;
 pub mod resource_analyzer;
 pub mod return_decoder;
 pub mod scval_to_json;
+pub mod struct_decoder;
 pub mod walker;
 
 pub use argument_decoder::ArgumentDecoder;
@@ -40,7 +41,8 @@ pub use resource_analyzer::{
     MetricDiagnostic, MetricKind, ResourceDiagnostics, ResourceUsageAnalyzer, TransactionResultMeta,
 };
 pub use return_decoder::ReturnValueDecoder;
-pub use scval_to_json::{scval_to_json, scval_to_json_with_spec};
+pub use scval_to_json::{scval_to_json, scval_to_json_with_contract_spec, scval_to_json_with_spec};
+pub use struct_decoder::{StructDecodeReport, StructDecoder};
 pub use walker::{
     walk_diagnostic_events, DiagnosticEventKind, DiagnosticEventWalker, StructuredDiagnosticEvent,
 };

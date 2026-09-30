@@ -3,7 +3,7 @@
 use crate::types::trace::{DiffChangeType, LedgerEntryDiff, StateDiff};
 use serde::Serialize;
 use std::fmt::Debug;
-use stellar_xdr::curr::{ContractCodeEntry, ContractDataEntry, ScMap, ScVal};
+use stellar_xdr::curr::{Asset, ContractCodeEntry, ContractDataEntry, ScMap, ScVal, TrustLineEntry};
 
 /// Report a contract WASM code hash rotation.
 ///
@@ -38,6 +38,73 @@ pub fn diff_contract_data(old: &ContractDataEntry, new: &ContractDataEntry) -> S
     let root = format!("storage[{}]", json_string(&old.key));
     diff_value(&old.val, &new.val, &root, &mut entries);
     StateDiff { entries }
+}
+
+/// Compute the changes to a trustline entry.
+///
+/// Reports balance shifts, limit changes, authorization flag changes, and
+/// liability changes for classic assets. The asset field is rendered in a
+/// human-readable form (e.g. "USDC:ISSUER" or "native").
+pub fn diff_trustline_entry(old: &TrustLineEntry, new: &TrustLineEntry) -> StateDiff {
+    let mut entries = Vec::new();
+    let asset = format_asset(&old.asset);
+    let root = format!("trustline[{asset}]");
+
+    if old.balance != new.balance {
+        entries.push(LedgerEntryDiff {
+            key: format!("{root}.balance"),
+            before: Some(old.balance.to_string()),
+            after: Some(new.balance.to_string()),
+            change_type: DiffChangeType::Updated,
+        });
+    }
+
+    if old.limit != new.limit {
+        entries.push(LedgerEntryDiff {
+            key: format!("{root}.limit"),
+            before: Some(old.limit.to_string()),
+            after: Some(new.limit.to_string()),
+            change_type: DiffChangeType::Updated,
+        });
+    }
+
+    if old.flags != new.flags {
+        entries.push(LedgerEntryDiff {
+            key: format!("{root}.flags"),
+            before: Some(format!("{:?}", old.flags)),
+            after: Some(format!("{:?}", new.flags)),
+            change_type: DiffChangeType::Updated,
+        });
+    }
+
+    if old.ext != new.ext {
+        entries.push(LedgerEntryDiff {
+            key: format!("{root}.ext"),
+            before: Some(format!("{:?}", old.ext)),
+            after: Some(format!("{:?}", new.ext)),
+            change_type: DiffChangeType::Updated,
+        });
+    }
+
+    StateDiff { entries }
+}
+
+fn format_asset(asset: &Asset) -> String {
+    match asset {
+        Asset::Native => "native".to_owned(),
+        Asset::CreditAlphanum4(a) => {
+            let code = String::from_utf8_lossy(&a.asset_code.0)
+                .trim_end_matches('\0')
+                .to_owned();
+            format!("{code}:{}", a.issuer.to_string())
+        }
+        Asset::CreditAlphanum12(a) => {
+            let code = String::from_utf8_lossy(&a.asset_code.0)
+                .trim_end_matches('\0')
+                .to_owned();
+            format!("{code}:{}", a.issuer.to_string())
+        }
+    }
 }
 
 fn diff_value(old: &ScVal, new: &ScVal, path: &str, entries: &mut Vec<LedgerEntryDiff>) {
@@ -147,11 +214,12 @@ fn json_string<T: Debug + Serialize>(value: &T) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{diff_contract_code_entry, diff_contract_data};
+    use super::{diff_contract_code_entry, diff_contract_data, diff_trustline_entry};
     use crate::types::trace::DiffChangeType;
     use stellar_xdr::curr::{
-        ContractCodeEntry, ContractCodeEntryExt, ContractDataDurability, ContractDataEntry,
-        ExtensionPoint, Hash, ScMapEntry, ScSymbol, ScVal, StringM,
+        AccountId, Asset, AssetCode12, AssetCode4, ContractCodeEntry, ContractCodeEntryExt,
+        ContractDataDurability, ContractDataEntry, ExtensionPoint, Hash, PublicKey, ScMapEntry,
+        ScSymbol, ScVal, StringM, TrustLineEntry, TrustLineEntryExt, TrustLineFlags, Uint256,
     };
 
     fn contract_code(hash: [u8; 32]) -> ContractCodeEntry {
@@ -305,5 +373,92 @@ mod tests {
         let entry = contract_code([0x11; 32]);
 
         assert!(diff_contract_code_entry(&entry, &entry).entries.is_empty());
+    }
+
+    fn trustline(
+        asset: Asset,
+        balance: i64,
+        limit: i64,
+        flags: u32,
+    ) -> TrustLineEntry {
+        TrustLineEntry {
+            account_id: AccountId(PublicKey::PublicKeyTypeEd25519(Uint256([0; 32]))),
+            asset,
+            balance,
+            limit,
+            flags: TrustLineFlags::from_bits_truncate(flags),
+            ext: TrustLineEntryExt::V0,
+        }
+    }
+
+    fn usdc_asset() -> Asset {
+        Asset::CreditAlphanum4(AssetCode4(*b"USDC"))
+    }
+
+    #[test]
+    fn trustline_balance_change_is_reported() {
+        let old = trustline(usdc_asset(), 100, 1000, 0);
+        let new = trustline(usdc_asset(), 250, 1000, 0);
+
+        let diff = diff_trustline_entry(&old, &new);
+
+        assert_eq!(diff.entries.len(), 1);
+        assert!(diff.entries[0].key.contains("balance"));
+        assert_eq!(diff.entries[0].before.as_deref(), Some("100"));
+        assert_eq!(diff.entries[0].after.as_deref(), Some("250"));
+        assert!(matches!(
+            diff.entries[0].change_type,
+            DiffChangeType::Updated
+        ));
+    }
+
+    #[test]
+    fn trustline_limit_and_flags_changes_are_reported() {
+        let old = trustline(usdc_asset(), 100, 1000, 0);
+        let new = trustline(usdc_asset(), 100, 5000, 1);
+
+        let diff = diff_trustline_entry(&old, &new);
+
+        assert_eq!(diff.entries.len(), 2);
+        assert!(diff.entries.iter().any(|e| e.key.contains("limit")));
+        assert!(diff.entries.iter().any(|e| e.key.contains("flags")));
+    }
+
+    #[test]
+    fn trustline_asset_is_rendered_human_readably() {
+        let old = trustline(usdc_asset(), 0, 1000, 0);
+        let new = trustline(usdc_asset(), 1, 1000, 0);
+
+        let diff = diff_trustline_entry(&old, &new);
+
+        assert!(diff.entries[0].key.contains("USDC"));
+    }
+
+    #[test]
+    fn trustline_alphanum12_asset_is_rendered() {
+        let asset = Asset::CreditAlphanum12(AssetCode12(*b"LONGASSET\0\0\0"));
+        let old = trustline(asset.clone(), 0, 1000, 0);
+        let new = trustline(asset, 5, 1000, 0);
+
+        let diff = diff_trustline_entry(&old, &new);
+
+        assert!(diff.entries[0].key.contains("LONGASSET"));
+    }
+
+    #[test]
+    fn trustline_native_asset_is_rendered() {
+        let old = trustline(Asset::Native, 0, 1000, 0);
+        let new = trustline(Asset::Native, 10, 1000, 0);
+
+        let diff = diff_trustline_entry(&old, &new);
+
+        assert!(diff.entries[0].key.contains("native"));
+    }
+
+    #[test]
+    fn identical_trustlines_produce_no_changes() {
+        let entry = trustline(usdc_asset(), 100, 1000, 0);
+
+        assert!(diff_trustline_entry(&entry, &entry).entries.is_empty());
     }
 }
